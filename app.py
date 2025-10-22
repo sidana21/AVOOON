@@ -1,16 +1,30 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from datetime import datetime
-import hashlib
 import secrets
 import os
+import random
+import time
+import threading
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
 DB_NAME = 'aviator_game.db'
+
+current_round = {
+    'id': None,
+    'multiplier': None,
+    'target_multiplier': None,
+    'start_time': None,
+    'status': 'waiting',
+    'current_multiplier': 1.0
+}
+
+round_lock = threading.Lock()
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -47,7 +61,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS game_rounds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             multiplier REAL NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            started_at TIMESTAMP,
+            ended_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'completed'
         )
     ''')
     
@@ -78,7 +94,7 @@ def init_db():
     admin_count = cursor.fetchone()['count']
     
     if admin_count == 0:
-        password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+        password_hash = generate_password_hash('admin123')
         cursor.execute("INSERT INTO admins (username, password) VALUES (?, ?)", ('admin', password_hash))
     
     cursor.execute("SELECT COUNT(*) as count FROM settings WHERE key = 'min_bet'")
@@ -89,6 +105,77 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+def start_new_round():
+    with round_lock:
+        target_multiplier = round(random.uniform(1.01, 10.0), 2)
+        
+        current_round['id'] = None
+        current_round['target_multiplier'] = target_multiplier
+        current_round['current_multiplier'] = 1.0
+        current_round['start_time'] = time.time()
+        current_round['status'] = 'running'
+        
+        print(f"New round starting with target multiplier: {target_multiplier}x")
+
+def run_game_loop():
+    time.sleep(5)
+    
+    while True:
+        start_new_round()
+        
+        start_time = time.time()
+        duration = random.uniform(3, 12)
+        
+        while time.time() - start_time < duration:
+            with round_lock:
+                elapsed = time.time() - start_time
+                progress = min(elapsed / duration, 1.0)
+                
+                current_round['current_multiplier'] = round(
+                    1.0 + (current_round['target_multiplier'] - 1.0) * progress, 2
+                )
+            
+            time.sleep(0.05)
+        
+        end_round()
+        
+        time.sleep(8)
+
+def end_round():
+    with round_lock:
+        if current_round['status'] != 'running':
+            return
+        
+        final_multiplier = current_round['target_multiplier']
+        current_round['status'] = 'ended'
+        current_round['multiplier'] = final_multiplier
+        
+        print(f"Round ended at {final_multiplier}x")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "INSERT INTO game_rounds (multiplier, started_at, ended_at, status) VALUES (?, ?, ?, ?)",
+            (final_multiplier, datetime.fromtimestamp(current_round['start_time']), datetime.now(), 'completed')
+        )
+        round_id = cursor.lastrowid
+        current_round['id'] = round_id
+        
+        cursor.execute("UPDATE bets SET status = 'lost', round_id = ? WHERE status = 'active'", (round_id,))
+        
+        cursor.execute("SELECT player_id FROM bets WHERE status = 'lost' AND round_id = ?", (round_id,))
+        lost_players = cursor.fetchall()
+        
+        for player in lost_players:
+            cursor.execute("UPDATE players SET total_losses = total_losses + 1 WHERE player_id = ?", 
+                           (player['player_id'],))
+        
+        conn.commit()
+        conn.close()
+        
+        current_round['status'] = 'waiting'
 
 @app.route('/')
 def index():
@@ -109,15 +196,13 @@ def admin_login_post():
     if not username or not password:
         return jsonify({'success': False, 'message': 'Username and password required'}), 400
     
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
-    
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM admins WHERE username = ? AND password = ?", (username, password_hash))
+    cursor.execute("SELECT * FROM admins WHERE username = ?", (username,))
     admin = cursor.fetchone()
     conn.close()
     
-    if admin:
+    if admin and check_password_hash(admin['password'], password):
         session['admin_logged_in'] = True
         session['admin_username'] = username
         return jsonify({'success': True, 'message': 'Login successful'})
@@ -220,13 +305,22 @@ def get_rounds():
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM game_rounds 
-        ORDER BY created_at DESC 
+        ORDER BY ended_at DESC 
         LIMIT ?
     """, (limit,))
     rounds = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
     return jsonify({'rounds': rounds})
+
+@app.route('/api/game/status')
+def game_status():
+    with round_lock:
+        return jsonify({
+            'status': current_round['status'],
+            'current_multiplier': current_round['current_multiplier'],
+            'target_multiplier': current_round['target_multiplier'] if current_round['status'] == 'ended' else None
+        })
 
 @app.route('/api/player/<player_id>/balance', methods=['GET'])
 def get_player_balance(player_id):
@@ -256,6 +350,10 @@ def place_bet(player_id):
     if not bet_amount or bet_amount <= 0:
         return jsonify({'success': False, 'message': 'Invalid bet amount'}), 400
     
+    with round_lock:
+        if current_round['status'] != 'waiting':
+            return jsonify({'success': False, 'message': 'Cannot place bet during active round'}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     
@@ -283,11 +381,11 @@ def place_bet(player_id):
 
 @app.route('/api/bet/<int:bet_id>/cashout', methods=['POST'])
 def cashout_bet(bet_id):
-    data = request.json
-    multiplier = data.get('multiplier')
-    
-    if not multiplier or multiplier < 1:
-        return jsonify({'success': False, 'message': 'Invalid multiplier'}), 400
+    with round_lock:
+        if current_round['status'] != 'running':
+            return jsonify({'success': False, 'message': 'No active round'}), 400
+        
+        multiplier = current_round['current_multiplier']
     
     conn = get_db()
     cursor = conn.cursor()
@@ -313,36 +411,12 @@ def cashout_bet(bet_id):
     conn.commit()
     conn.close()
     
-    return jsonify({'success': True, 'win_amount': win_amount, 'balance': new_balance})
-
-@app.route('/api/round/end', methods=['POST'])
-def end_round():
-    data = request.json
-    multiplier = data.get('multiplier')
-    
-    if not multiplier or multiplier < 1:
-        return jsonify({'success': False, 'message': 'Invalid multiplier'}), 400
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute("INSERT INTO game_rounds (multiplier) VALUES (?)", (multiplier,))
-    round_id = cursor.lastrowid
-    
-    cursor.execute("UPDATE bets SET status = 'lost', round_id = ? WHERE status = 'active'", (round_id,))
-    
-    cursor.execute("SELECT player_id FROM bets WHERE status = 'lost' AND round_id = ?", (round_id,))
-    lost_players = cursor.fetchall()
-    
-    for player in lost_players:
-        cursor.execute("UPDATE players SET total_losses = total_losses + 1 WHERE player_id = ?", 
-                       (player['player_id'],))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'round_id': round_id})
+    return jsonify({'success': True, 'win_amount': win_amount, 'balance': new_balance, 'multiplier': multiplier})
 
 if __name__ == '__main__':
     init_db()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    
+    game_thread = threading.Thread(target=run_game_loop, daemon=True)
+    game_thread.start()
+    
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
