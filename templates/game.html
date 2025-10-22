@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aviator</title>
+    <title>Aviator - لعبة الطائرة</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="wrapper">
@@ -13,7 +16,7 @@
         <div id="header">
             <div id="last-counters"></div>
             <div>
-                <div id="balance">BALANCE: </div>
+                <div id="balance">رصيد تجريبي</div>
                 <div id="balance-amount">
                     <div style="position: absolute; top: 5px; right: 10px; font-size: 19px; color: #ffffff;">€</div>
                 </div>
@@ -23,12 +26,12 @@
         <div id="counterWrapper">
             <div id="bg-image"></div>
             <canvas id="canvas"></canvas>
-            <div id="counter">1.00</div>
+            <div id="counter">1.00x</div>
         </div>
 
         <div id="bottom-wrapper">
             <div id="input-wrapper">
-                <input type="number" id="bet-input" min="0" max="100" pattern="[0-9]{2}" />
+                <input type="number" id="bet-input" min="1" max="1000" placeholder="مبلغ الرهان" />
                 <div style="position: absolute; top: 10px; right: 10px; font-size: 19px; color: #ffffff;">€</div>
             </div>
             <button id="bet-button">BET</button>

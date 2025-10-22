@@ -22,9 +22,12 @@ if (!playerId) {
 }
 
 let currentBetId = null;
+let currentBetAmount = 0;
 let calculatedBalanceAmount = 3000;
 let gameStatus = 'waiting';
 let currentMultiplier = 1.0;
+let isExploding = false;
+let explosionParticles = [];
 
 const image = new Image();
 image.src = '/static/img/aviator_jogo.png';
@@ -75,6 +78,101 @@ inputBox.addEventListener("keydown", function (e) {
     }
 });
 
+function showResultMessage(won, amount, multiplier) {
+    const resultDiv = document.createElement('div');
+    resultDiv.className = won ? 'result-message win' : 'result-message loss';
+    
+    if (won) {
+        resultDiv.innerHTML = `
+            <div class="result-icon">🎉</div>
+            <div class="result-title">ربح!</div>
+            <div class="result-amount">+€${amount.toFixed(2)}</div>
+            <div class="result-multiplier">${multiplier.toFixed(2)}x</div>
+        `;
+    } else {
+        resultDiv.innerHTML = `
+            <div class="result-icon">💥</div>
+            <div class="result-title">خسارة!</div>
+            <div class="result-amount">-€${amount.toFixed(2)}</div>
+            <div class="result-multiplier">طار عند ${multiplier.toFixed(2)}x</div>
+        `;
+    }
+    
+    document.body.appendChild(resultDiv);
+    
+    setTimeout(() => {
+        resultDiv.style.opacity = '0';
+        setTimeout(() => resultDiv.remove(), 300);
+    }, 3000);
+}
+
+function createExplosion(cx, cy) {
+    isExploding = true;
+    explosionParticles = [];
+    
+    for (let i = 0; i < 30; i++) {
+        const angle = (Math.PI * 2 * i) / 30;
+        const speed = 2 + Math.random() * 4;
+        explosionParticles.push({
+            x: cx,
+            y: cy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            size: 3 + Math.random() * 5,
+            color: ['#ff4500', '#ff6347', '#ffa500', '#ffff00'][Math.floor(Math.random() * 4)]
+        });
+    }
+    
+    animateExplosion();
+}
+
+function animateExplosion() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const canvasOffsetX = canvas.width / 2 - x;
+    const canvasOffsetY = canvas.height / 2 - y;
+    
+    ctx.save();
+    ctx.translate(canvasOffsetX, canvasOffsetY);
+    
+    for (let i = 1; i < dotPath.length; i++) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#dc3545';
+        ctx.lineWidth = 2;
+        ctx.moveTo(dotPath[i - 1].x, dotPath[i - 1].y);
+        ctx.lineTo(dotPath[i].x, dotPath[i].y);
+        ctx.stroke();
+    }
+    
+    let allDead = true;
+    for (let particle of explosionParticles) {
+        if (particle.life > 0) {
+            allDead = false;
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+            particle.vy += 0.1;
+            particle.life -= 0.02;
+            
+            ctx.beginPath();
+            ctx.fillStyle = particle.color;
+            ctx.globalAlpha = particle.life;
+            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+    
+    if (!allDead) {
+        requestAnimationFrame(animateExplosion);
+    } else {
+        isExploding = false;
+        explosionParticles = [];
+    }
+}
+
 async function pollGameStatus() {
     try {
         const response = await fetch('/api/game/status');
@@ -87,12 +185,14 @@ async function pollGameStatus() {
         document.getElementById('counter').textContent = currentMultiplier.toFixed(2) + 'x';
         
         if (gameStatus === 'waiting') {
-            messageField.textContent = 'Place your bet';
+            messageField.textContent = 'ضع رهانك';
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
             }
-            resetAnimation();
+            if (!isExploding) {
+                resetAnimation();
+            }
         } else if (gameStatus === 'running') {
             if (previousStatus === 'waiting') {
                 startAnimation();
@@ -101,12 +201,18 @@ async function pollGameStatus() {
         } else if (gameStatus === 'ended') {
             if (data.target_multiplier) {
                 counterDepo.unshift(data.target_multiplier);
+                if (counterDepo.length > 26) {
+                    counterDepo.pop();
+                }
                 updateCounterDepo();
             }
             
-            if (currentBetId) {
-                messageField.textContent = 'Round ended - You lost!';
+            if (currentBetId && !isExploding) {
+                createExplosion(x, y);
+                showResultMessage(false, currentBetAmount, data.target_multiplier || currentMultiplier);
+                messageField.textContent = `طار عند ${(data.target_multiplier || currentMultiplier).toFixed(2)}x - خسرت €${currentBetAmount.toFixed(2)}!`;
                 currentBetId = null;
+                currentBetAmount = 0;
                 betButton.textContent = 'BET';
                 await loadBalance();
             }
@@ -126,7 +232,7 @@ function resetAnimation() {
 
 function startAnimation() {
     resetAnimation();
-    messageField.textContent = '';
+    messageField.textContent = 'الطائرة تطير...';
     animationId = requestAnimationFrame(draw);
 }
 
@@ -159,6 +265,7 @@ function draw() {
     for (let i = 1; i < dotPath.length; i++) {
         ctx.beginPath();
         ctx.strokeStyle = '#dc3545';
+        ctx.lineWidth = 2;
         ctx.moveTo(dotPath[i - 1].x, dotPath[i - 1].y);
         ctx.lineTo(dotPath[i].x, dotPath[i].y);
         ctx.stroke();
@@ -193,17 +300,17 @@ async function placeBet() {
     const betAmount = parseFloat(inputBox.value);
 
     if (!betAmount || isNaN(betAmount) || betAmount <= 0) {
-        messageField.textContent = 'Please enter a valid bet amount';
+        messageField.textContent = 'الرجاء إدخال مبلغ رهان صحيح';
         return;
     }
 
     if (betAmount > calculatedBalanceAmount) {
-        messageField.textContent = 'Insufficient balance';
+        messageField.textContent = 'رصيد غير كافي';
         return;
     }
 
     if (gameStatus !== 'waiting') {
-        messageField.textContent = 'Wait for next round';
+        messageField.textContent = 'انتظر الجولة القادمة';
         return;
     }
 
@@ -220,27 +327,29 @@ async function placeBet() {
 
         if (data.success) {
             currentBetId = data.bet_id;
+            currentBetAmount = betAmount;
             calculatedBalanceAmount = data.balance;
             balanceAmount.textContent = calculatedBalanceAmount.toFixed(2).toString() + '€';
-            betButton.textContent = 'CASH OUT';
-            messageField.textContent = 'Bet placed! Wait for round...';
+            betButton.textContent = 'سحب الأرباح';
+            betButton.style.backgroundColor = '#30fcbe';
+            messageField.textContent = `تم الرهان بمبلغ €${betAmount.toFixed(2)} - انتظر انطلاق الطائرة...`;
         } else {
-            messageField.textContent = data.message || 'Bet failed';
+            messageField.textContent = data.message || 'فشل الرهان';
         }
     } catch (error) {
         console.error('Error placing bet:', error);
-        messageField.textContent = 'Error placing bet';
+        messageField.textContent = 'خطأ في وضع الرهان';
     }
 }
 
 async function cashOut() {
     if (!currentBetId) {
-        messageField.textContent = 'No active bet';
+        messageField.textContent = 'لا يوجد رهان نشط';
         return;
     }
 
     if (gameStatus !== 'running') {
-        messageField.textContent = 'Cannot cash out now';
+        messageField.textContent = 'لا يمكن السحب الآن';
         return;
     }
 
@@ -259,18 +368,22 @@ async function cashOut() {
             calculatedBalanceAmount = data.balance;
             balanceAmount.textContent = calculatedBalanceAmount.toFixed(2).toString() + '€';
 
+            showResultMessage(true, data.win_amount, data.multiplier);
+            
             currentBetId = null;
+            currentBetAmount = 0;
             betButton.textContent = 'BET';
-            messageField.textContent = `Cashed out at ${data.multiplier.toFixed(2)}x! Won €${data.win_amount.toFixed(2)}`;
+            betButton.style.backgroundColor = '#fb024c';
+            messageField.textContent = `تم السحب عند ${data.multiplier.toFixed(2)}x! ربحت €${data.win_amount.toFixed(2)} 🎉`;
         } else {
-            messageField.textContent = data.message || 'Cashout failed';
+            messageField.textContent = data.message || 'فشل السحب';
         }
     } catch (error) {
         console.error('Error cashing out:', error);
-        messageField.textContent = 'Error cashing out';
+        messageField.textContent = 'خطأ في السحب';
     }
 }
 
 setInterval(pollGameStatus, 100);
 
-messageField.textContent = 'Loading...';
+messageField.textContent = 'جاري التحميل...';
