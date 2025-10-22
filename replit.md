@@ -1,41 +1,133 @@
-# Aviator Betting Game Clone
+# Aviator Betting Game مع لوحة تحكم الإدارة
 
-## Overview
-This is a clone of the popular Aviator betting game. It's a browser-based game where players place bets and must cash out before the plane flies away. The multiplier increases over time, and players win based on when they cash out.
+## نظرة عامة
+هذا مشروع متكامل للعبة Aviator (لعبة رهان الطائرة) مع لوحة تحكم إدارية كاملة. يتيح للاعبين المراهنة على الطائرة وسحب أرباحهم قبل أن تطير، بينما يمكن للإداريين مراقبة جميع الأنشطة والإحصائيات.
 
-## Project Structure
-- `index.html` - Main HTML file with game UI
-- `script.js` - Game logic and canvas animation
-- `style.css` - Styling for the game interface
-- `img/` - Image assets including the plane sprite and background
+## الميزات الرئيسية
 
-## Technology Stack
-- Pure HTML5, CSS3, and JavaScript
-- Canvas API for animations
-- No external dependencies or frameworks
+### للاعبين:
+- واجهة لعبة تفاعلية مع رسوم متحركة للطائرة
+- نظام رهان واقعي مع مضاعفات عشوائية
+- حفظ الرصيد والبيانات في قاعدة بيانات
+- تتبع تلقائي لسجل الجولات السابقة
+- رصيد ابتدائي: €3000
 
-## How It Works
-1. Players start with a balance of €3000
-2. Players can place a bet when the round is not active
-3. A plane takes off and a multiplier increases from 1.00x
-4. Players must cash out before the plane flies away to win
-5. Winnings are calculated as: bet amount × current multiplier
-6. Previous round results are displayed at the top
+### للإداريين:
+- لوحة تحكم شاملة بالعربية
+- إحصائيات مباشرة (عدد اللاعبين، الرهانات، الأرباح، خسائر اللاعبين)
+- عرض قائمة اللاعبين مع تفاصيل كل لاعب
+- سجل كامل للرهانات مع الحالة (فوز/خسارة)
+- سجل الجولات مع المضاعفات
+- نظام تسجيل دخول آمن
 
-## Current State
-- Static frontend game fully functional
-- All game logic implemented in client-side JavaScript
-- No backend or database (balance is not persisted)
+## البنية التقنية
 
-## Recent Changes
-- 2025-10-22: Initial project import and setup for Replit environment
-- 2025-10-22: Configured Python HTTP server to serve static files on port 5000
+### Backend (Flask - Python)
+- **Framework**: Flask 3.1.2
+- **Database**: SQLite (aviator_game.db)
+- **API**: RESTful API للتواصل مع Frontend
+- **Authentication**: Flask Sessions للإدارة
 
-## Development
-The game runs on a Python HTTP server on port 5000. To start the game:
-1. Run the workflow
-2. Open the preview in your browser
-3. Place bets and enjoy!
+### Frontend
+- **Game Interface**: HTML5 Canvas + JavaScript
+- **Admin Panel**: HTML5 + CSS3 + JavaScript
+- **Styling**: Custom CSS مع تصميم متجاوب
 
-## User Preferences
-None specified yet.
+### قاعدة البيانات
+الجداول:
+- `admins`: معلومات تسجيل دخول الإداريين
+- `players`: بيانات اللاعبين والأرصدة
+- `game_rounds`: سجل جولات اللعبة
+- `bets`: سجل جميع الرهانات
+- `settings`: إعدادات اللعبة
+
+## كيفية الاستخدام
+
+### الوصول للعبة:
+1. افتح الرابط الرئيسي: `/`
+2. ستحصل تلقائياً على معرف لاعب فريد
+3. الرصيد الابتدائي: €3000
+4. ضع رهانك واضغط "BET"
+5. اسحب أرباحك قبل أن تطير الطائرة بالضغط على "Cash Out"
+
+### الوصول للوحة التحكم:
+1. افتح: `/admin`
+2. **اسم المستخدم**: `admin`
+3. **كلمة المرور**: `admin123`
+4. شاهد جميع الإحصائيات والبيانات المباشرة
+
+## API Endpoints
+
+### للعبة:
+- `GET /api/player/{player_id}/balance` - الحصول على رصيد اللاعب
+- `POST /api/player/{player_id}/bet` - وضع رهان جديد
+- `POST /api/bet/{bet_id}/cashout` - سحب الرهان
+- `POST /api/round/end` - إنهاء جولة
+
+### للإدارة:
+- `POST /admin/login` - تسجيل دخول الإدارة
+- `GET /admin/logout` - تسجيل الخروج
+- `GET /api/stats` - الحصول على الإحصائيات العامة
+- `GET /api/players` - قائمة اللاعبين
+- `GET /api/bets` - سجل الرهانات
+- `GET /api/rounds` - سجل الجولات
+
+## الملفات الرئيسية
+
+```
+├── app.py                      # Backend Flask
+├── aviator_game.db             # قاعدة البيانات SQLite
+├── templates/
+│   ├── game.html              # واجهة اللعبة
+│   ├── admin_login.html       # صفحة تسجيل الدخول
+│   └── admin_dashboard.html   # لوحة التحكم
+├── static/
+│   ├── css/
+│   │   └── style.css         # تنسيقات اللعبة
+│   ├── js/
+│   │   └── game.js           # منطق اللعبة
+│   └── img/
+│       └── aviator_jogo.png  # صورة الطائرة
+```
+
+## الإعدادات الافتراضية
+- الرصيد الابتدائي: €3000
+- الحد الأدنى للرهان: €1
+- الحد الأقصى للرهان: €1000
+- مدة الانتظار بين الجولات: 8 ثواني
+- المضاعف العشوائي: من 0.8x إلى 10x
+
+## التطوير
+
+### تشغيل المشروع:
+```bash
+python3 app.py
+```
+الخادم سيعمل على: http://0.0.0.0:5000
+
+### المتطلبات:
+- Python 3.11+
+- Flask 3.1.2
+- Flask-CORS 6.0.1
+
+## الأمان
+- كلمات المرور مشفرة باستخدام SHA256
+- جلسات آمنة للإدارة
+- معرفات فريدة للاعبين
+- حماية من CSRF
+
+## التحديثات الأخيرة
+- 2025-10-22: إضافة لوحة تحكم الإدارة الكاملة
+- 2025-10-22: ربط اللعبة بقاعدة البيانات
+- 2025-10-22: إنشاء API شامل
+- 2025-10-22: إعداد المشروع في بيئة Replit
+
+## ملاحظات
+- قاعدة البيانات محلية (SQLite) - مناسبة للتطوير والاختبار
+- للإنتاج، يُنصح باستخدام PostgreSQL
+- يمكن تغيير كلمة مرور الإدارة من قاعدة البيانات
+- البيانات محفوظة حتى بعد إعادة التشغيل
+
+## تفضيلات المستخدم
+- اللغة المفضلة: العربية
+- نظام الإدارة مصمم بالكامل بالعربية
