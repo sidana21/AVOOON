@@ -27,9 +27,13 @@ let gameStatus = 'waiting';
 let currentMultiplier = 1.0;
 
 const image = new Image();
+image.onload = function() {
+    console.log('Plane image loaded successfully');
+};
+image.onerror = function() {
+    console.error('Failed to load plane image');
+};
 image.src = '/static/img/aviator_jogo.png';
-image.style.minWidth = '100%';
-image.style.width = '100%';
 
 let balanceAmount = document.getElementById('balance-amount');
 let betButton = document.getElementById('bet-button');
@@ -94,11 +98,15 @@ async function pollGameStatus() {
             }
             resetAnimation();
         } else if (gameStatus === 'running') {
-            if (previousStatus === 'waiting') {
+            if (previousStatus === 'waiting' || !animationId) {
                 startAnimation();
             }
-            updateAnimation();
         } else if (gameStatus === 'ended') {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
             if (data.target_multiplier) {
                 counterDepo.unshift(data.target_multiplier);
                 updateCounterDepo();
@@ -125,24 +133,25 @@ function resetAnimation() {
 }
 
 function startAnimation() {
+    console.log('Starting animation, gameStatus:', gameStatus);
     resetAnimation();
     messageField.textContent = '';
-    animationId = requestAnimationFrame(draw);
+    if (!animationId) {
+        animationId = requestAnimationFrame(draw);
+    }
 }
 
-function updateAnimation() {
-    const progress = (currentMultiplier - 1.0) / 9.0;
-    x = progress * 800;
-    y = canvas.height / 2 + 50 * Math.cos(x / 100);
-}
 
 function draw() {
+    if (gameStatus !== 'running') {
+        animationId = null;
+        return;
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (gameStatus === 'running') {
-        x += speedX;
-        y = canvas.height / 2 + 50 * Math.cos(x / 100);
-    }
+    x += speedX;
+    y = canvas.height / 2 + 50 * Math.cos(x / 100);
 
     dotPath.push({ x: x, y: y });
     
@@ -159,6 +168,7 @@ function draw() {
     for (let i = 1; i < dotPath.length; i++) {
         ctx.beginPath();
         ctx.strokeStyle = '#dc3545';
+        ctx.lineWidth = 3;
         ctx.moveTo(dotPath[i - 1].x, dotPath[i - 1].y);
         ctx.lineTo(dotPath[i].x, dotPath[i].y);
         ctx.stroke();
@@ -167,17 +177,23 @@ function draw() {
     ctx.beginPath();
     ctx.fillStyle = '#dc3545';
     ctx.lineWidth = 5;
-    ctx.arc(x, y, 1, 0, 2 * Math.PI);
+    ctx.arc(x, y, 5, 0, 2 * Math.PI);
     ctx.fill();
 
-    if (image.complete) {
-        ctx.drawImage(image, x - 28, y - 78, 185, 85);
+    if (image.complete && image.naturalWidth > 0) {
+        ctx.drawImage(image, x - 50, y - 50, 100, 50);
+    } else {
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText('✈', x - 10, y + 5);
     }
 
     ctx.restore();
 
     if (gameStatus === 'running') {
         animationId = requestAnimationFrame(draw);
+    } else {
+        animationId = null;
     }
 }
 

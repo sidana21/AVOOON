@@ -413,10 +413,10 @@ def cashout_bet(bet_id):
     
     return jsonify({'success': True, 'win_amount': win_amount, 'balance': new_balance, 'multiplier': multiplier})
 
+init_db()
+
+game_thread = threading.Thread(target=run_game_loop, daemon=True)
+game_thread.start()
+
 if __name__ == '__main__':
-    init_db()
-    
-    game_thread = threading.Thread(target=run_game_loop, daemon=True)
-    game_thread.start()
-    
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
