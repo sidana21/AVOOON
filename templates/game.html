@@ -1,41 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aviator</title>
+    <title>Aviator Game</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="wrapper">
-    <div id="mid-wrapper">
+    <div id="main-container">
+        <!-- Header with Balance and Stats -->
         <div id="header">
-            <div id="last-counters"></div>
-            <div>
-                <div id="balance">BALANCE: </div>
-                <div id="balance-amount">
-                    <div style="position: absolute; top: 5px; right: 10px; font-size: 19px; color: #ffffff;">€</div>
+            <div id="stats-container">
+                <div class="stat-box">
+                    <div class="stat-label">الرصيد</div>
+                    <div class="stat-value" id="balance-amount">3000.00 €</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">إجمالي الأرباح</div>
+                    <div class="stat-value stat-win" id="total-wins">0.00 €</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">إجمالي الخسائر</div>
+                    <div class="stat-value stat-loss" id="total-losses">0.00 €</div>
                 </div>
             </div>
         </div>
 
-        <div id="counterWrapper">
-            <div id="bg-image"></div>
-            <canvas id="canvas"></canvas>
-            <div id="counter">1.00</div>
+        <!-- Last Rounds History -->
+        <div id="history-wrapper">
+            <div class="history-label">جولات سابقة</div>
+            <div id="last-counters"></div>
         </div>
 
-        <div id="bottom-wrapper">
-            <div id="input-wrapper">
-                <input type="number" id="bet-input" min="0" max="100" pattern="[0-9]{2}" />
-                <div style="position: absolute; top: 10px; right: 10px; font-size: 19px; color: #ffffff;">€</div>
+        <!-- Game Canvas Area -->
+        <div id="game-area">
+            <div id="counterWrapper">
+                <canvas id="canvas"></canvas>
+                <div id="counter">1.00x</div>
+                <div id="game-status">في انتظار الرهانات...</div>
             </div>
-            <button id="bet-button">BET</button>
         </div>
 
-        <div id="message-button">
-            <p id="message"></p>
+        <!-- Betting Controls -->
+        <div id="betting-area">
+            <div id="bet-controls">
+                <div id="input-wrapper">
+                    <label for="bet-input">قيمة الرهان</label>
+                    <div class="input-container">
+                        <input type="number" id="bet-input" min="1" step="0.01" placeholder="أدخل المبلغ" />
+                        <span class="currency">€</span>
+                    </div>
+                </div>
+                <button id="bet-button" class="btn-primary">
+                    <span id="btn-text">وضع رهان</span>
+                </button>
+            </div>
+            
+            <div id="current-bet-info" style="display: none;">
+                <div class="bet-info-row">
+                    <span>مبلغ الرهان:</span>
+                    <span id="current-bet-amount">0 €</span>
+                </div>
+                <div class="bet-info-row">
+                    <span>ربح محتمل:</span>
+                    <span id="potential-win" class="potential-win">0 €</span>
+                </div>
+            </div>
+
+            <div id="message-area">
+                <p id="message"></p>
+            </div>
+        </div>
+
+        <!-- Recent Bets Table -->
+        <div id="recent-bets-area">
+            <h3>آخر الرهانات</h3>
+            <div id="bets-table-wrapper">
+                <table id="bets-table">
+                    <thead>
+                        <tr>
+                            <th>الوقت</th>
+                            <th>الرهان</th>
+                            <th>المضاعف</th>
+                            <th>الربح</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bets-history">
+                        <tr class="no-bets">
+                            <td colspan="5">لا توجد رهانات بعد</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
