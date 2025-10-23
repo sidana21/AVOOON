@@ -161,18 +161,26 @@ async function pollGameStatus() {
         
         if (gameStatus === 'waiting') {
             gameStatusElement.textContent = 'في انتظار الرهانات...';
+            gameStatusElement.style.color = '#a0a0a0';
+            
+            if (isExploding) {
+                return;
+            }
+            
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
             }
             resetAnimation();
         } else if (gameStatus === 'running') {
-            gameStatusElement.textContent = 'الطائرة في الجو!';
+            gameStatusElement.textContent = '🚀 الطائرة في الجو!';
+            gameStatusElement.style.color = '#4caf50';
             if (previousStatus === 'waiting' || !animationId) {
                 startAnimation();
             }
         } else if (gameStatus === 'ended') {
-            gameStatusElement.textContent = 'انتهت الجولة';
+            gameStatusElement.textContent = '💥 انفجرت!';
+            gameStatusElement.style.color = '#ff0000';
             
             if (data.target_multiplier) {
                 counterDepo.unshift(data.target_multiplier);
@@ -181,29 +189,30 @@ async function pollGameStatus() {
             
             if (!isExploding) {
                 isExploding = true;
+                console.log('=== EXPLOSION TRIGGERED! ===', 'position:', x, y);
                 createExplosion(x, y);
+            }
+            
+            if (currentBetId) {
+                const lostAmount = currentBetAmount;
+                totalLosses += lostAmount;
                 
-                if (currentBetId) {
-                    const lostAmount = currentBetAmount;
-                    totalLosses += lostAmount;
-                    
-                    addBetToHistory({
-                        time: new Date(),
-                        amount: currentBetAmount,
-                        multiplier: data.target_multiplier,
-                        win: 0,
-                        status: 'lost'
-                    });
-                    
-                    showMessage('انفجرت! الطائرة طارت عند ' + data.target_multiplier.toFixed(2) + 'x 💥', 'error');
-                    currentBetId = null;
-                    currentBetAmount = 0;
-                    btnText.textContent = 'وضع رهان';
-                    betButton.classList.remove('cashout');
-                    currentBetInfo.style.display = 'none';
-                    updateUI();
-                    await loadBalance();
-                }
+                addBetToHistory({
+                    time: new Date(),
+                    amount: currentBetAmount,
+                    multiplier: data.target_multiplier,
+                    win: 0,
+                    status: 'lost'
+                });
+                
+                showMessage('انفجرت! الطائرة طارت عند ' + data.target_multiplier.toFixed(2) + 'x 💥', 'error');
+                currentBetId = null;
+                currentBetAmount = 0;
+                btnText.textContent = 'وضع رهان';
+                betButton.classList.remove('cashout');
+                currentBetInfo.style.display = 'none';
+                updateUI();
+                await loadBalance();
             }
         }
         
@@ -222,21 +231,22 @@ function resetAnimation() {
 }
 
 function createExplosion(centerX, centerY) {
+    console.log('Creating explosion at', centerX, centerY);
     explosionParticles = [];
-    const particleCount = 50;
+    const particleCount = 80;
     
     for (let i = 0; i < particleCount; i++) {
         const angle = (Math.PI * 2 * i) / particleCount;
-        const speed = 2 + Math.random() * 4;
+        const speed = 3 + Math.random() * 6;
         
         explosionParticles.push({
             x: centerX,
             y: centerY,
             vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
+            vy: Math.sin(angle) * speed - 2,
             life: 1.0,
-            size: 3 + Math.random() * 5,
-            color: Math.random() > 0.5 ? '#ff6b00' : '#ff0000'
+            size: 4 + Math.random() * 8,
+            color: ['#ff0000', '#ff6b00', '#ffaa00', '#ffff00'][Math.floor(Math.random() * 4)]
         });
     }
     
@@ -275,22 +285,36 @@ function drawExplosion() {
             
             particle.x += particle.vx;
             particle.y += particle.vy;
-            particle.vy += 0.1;
-            particle.life -= 0.02;
+            particle.vy += 0.15;
+            particle.life -= 0.015;
             
             ctx.globalAlpha = particle.life;
             ctx.fillStyle = particle.color;
             ctx.beginPath();
             ctx.arc(particle.x, particle.y, particle.size * particle.life, 0, Math.PI * 2);
             ctx.fill();
+            
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = particle.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
         }
     }
     
     ctx.globalAlpha = 1.0;
     
-    ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 40px Arial';
-    ctx.fillText('💥', x - 20, y + 15);
+    const explosionSize = Math.max(1 - (explosionParticles[0]?.life || 0), 0.2);
+    ctx.font = `bold ${60 * explosionSize}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💥', x, y);
+    
+    ctx.font = 'bold 30px Arial';
+    ctx.fillStyle = '#ff0000';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.strokeText('BOOM!', x, y + 40);
+    ctx.fillText('BOOM!', x, y + 40);
     
     ctx.restore();
     
@@ -298,8 +322,9 @@ function drawExplosion() {
         animationId = requestAnimationFrame(drawExplosion);
     } else {
         animationId = null;
-        isExploding = false;
-        resetAnimation();
+        setTimeout(() => {
+            isExploding = false;
+        }, 100);
     }
 }
 
